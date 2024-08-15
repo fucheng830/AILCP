@@ -9,6 +9,22 @@ def import_from_string(content, module_name, file_name=None):
     exec (value, module.__dict__)
     return module
 
+
+def import_endpoints():
+    """
+    从数据库加载接口
+    """
+    pass 
+
+def create_router():
+    """
+    创建路由
+    """
+    pass
+
+
+
+
 if __name__=='__main__':
     content = """
 import datetime

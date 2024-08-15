@@ -58,12 +58,12 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
         )
         db.add(new_image)
         db.commit()
-    static_url = os.environ.get("STATIC_URL", "http://site.123qiming.com")
+
     return {
         "status": 'Success',
         "message": 'Image uploaded successfully',
         "data": {
             "image_id": id,
-            "image_url": f"{static_url}/image/{id}.{ext}"
+            "image_url": f"/image/{id}.{ext}"
         }
     }

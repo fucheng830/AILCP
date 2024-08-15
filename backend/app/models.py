@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Column, String, Integer, \
-    ForeignKey, Float, Boolean, DateTime, Text, ARRAY, JSON, UniqueConstraint, CheckConstraint, \
+    ForeignKey, Float, DateTime, JSON, \
         LargeBinary, Numeric, Date, \
     TIMESTAMP, BigInteger
 
@@ -11,15 +11,13 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
 from sqlalchemy.dialects.postgresql import BYTEA
-from pgvector.sqlalchemy import Vector
-import sqlalchemy
 from datetime import datetime
-from pgvector.sqlalchemy import Vector
+
 
 
 Base = declarative_base()
 
-
+# common
 class User(Base):
     """User model."""
     __tablename__ = 'users'
@@ -55,126 +53,6 @@ class UserThirdPartyAccount(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now())
 
-# conversation
-class Conversation(Base):
-    __tablename__ = 'conversations'
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    title = Column(String, nullable=True)
-    summary = Column(String, nullable=True)
-    user_id = Column(UUID(as_uuid=True), nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-    
-    messages = relationship("Message", back_populates="conversation")
-
-class Message(Base):
-    __tablename__ = 'messages'
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    conversation_id = Column(UUID(as_uuid=True), ForeignKey('conversations.id'), nullable=False)
-    message_id = Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False)
-    parent_message_id = Column(UUID(as_uuid=True), nullable=True)
-    content = Column(String, nullable=False)
-    embedding = Column(String, nullable=True)  # Assuming `pgvector` extension, use appropriate type
-    role = Column(String, nullable=False)
-    user_id = Column(UUID(as_uuid=True), nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    
-    conversation = relationship("Conversation", back_populates="messages")
-
-
-# RAG
-class Node(Base):
-    __tablename__ = 'nodes'
-    
-    node_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
-    node_type = Column(String(255))
-    description = Column(Text)
-    data = Column(JSON)
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id'), nullable=False)
-    permission = Column(String, default='public')
-    content = Column(Text)
-    knowledge_id = Column(UUID(as_uuid=True))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
-    children = relationship(
-        "NodeRelationship",
-        back_populates="parent",
-        foreign_keys="[NodeRelationship.parent_id]",
-    )
-    
-    def __init__(self, name, node_type=None, description=None, data=None, user_id=None, permission='public', content=None, knowledge_id=None):
-        self.name = name
-        self.node_type = node_type
-        self.description = description
-        self.data = data
-        self.user_id = user_id
-        self.permission = permission
-        self.content = content
-        self.knowledge_id = knowledge_id
-
-
-class NodeRelationship(Base):
-    __tablename__ = 'node_relationships'
-    
-    parent_id = Column(UUID(as_uuid=True), ForeignKey('nodes.node_id'), primary_key=True)
-    child_id = Column(UUID(as_uuid=True), ForeignKey('nodes.node_id'), primary_key=True)
-    
-    parent = relationship(
-        "Node", 
-        foreign_keys=[parent_id], 
-        back_populates="children",
-        primaryjoin="NodeRelationship.parent_id==Node.node_id"  # 确保正确设置了 join 条件
-    )
-    child = relationship(
-        "Node", 
-        foreign_keys=[child_id],
-        primaryjoin="NodeRelationship.child_id==Node.node_id"  # 确保正确设置了 join 条件
-    )
-
-
-class Knowledge(Base):
-    __tablename__ = 'langchain_pg_collection'
-
-    name = Column(String)
-    cmetadata = Column(JSON)
-    uuid = Column(UUID, primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID)
-
-    embeddings = relationship(
-            "EmbeddingStore",
-            back_populates="collection",
-            passive_deletes=True,
-        )
-
-
-class EmbeddingStore(Base):
-    """Embedding store."""
-
-    __tablename__ = "langchain_pg_embedding"
-
-    collection_id = sqlalchemy.Column(
-        UUID(as_uuid=True),
-        sqlalchemy.ForeignKey(
-            f"{Knowledge.__tablename__}.uuid",
-            ondelete="CASCADE",
-        ),
-    )
-    collection = relationship(Knowledge, back_populates="embeddings")
-
-    embedding: Vector = sqlalchemy.Column(Vector())
-    document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
-    cmetadata = sqlalchemy.Column(JSONB, nullable=True)
-
-    # custom_id : any user defined id
-    custom_id = sqlalchemy.Column(sqlalchemy.String, nullable=True)
-    uuid = sqlalchemy.Column(
-        UUID(as_uuid=True), primary_key=True
-    )
-
 
 class File(Base):
     __tablename__ = 'files'
@@ -198,20 +76,6 @@ class FileContent(Base):
     file_data = Column(LargeBinary)
 
 
-class Document(Base):
-    __tablename__ = 'documents'
-
-    id = Column(UUID(as_uuid=True), primary_key=True)
-    doc_name = Column(String(255), nullable=False)
-    doc_content = Column(String(255), nullable=False)
-    upload_time = Column(DateTime, default=func.current_timestamp())
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id'))
-    group_id = Column(UUID(as_uuid=True))
-    knowledge_id = Column(UUID(as_uuid=True), ForeignKey('langchain_pg_collection.uuid'))
-    # Define the relationship to the User class, assuming it is defined with 'common.users' as the table name.
-    user = relationship('User', backref='documents')
-
-
 class Image(Base):
     __tablename__ = 'images'
 
@@ -221,52 +85,6 @@ class Image(Base):
     source_url = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now())
-
-
-# Agent
-class AgentCategory(Base):
-    __tablename__ = 'agent_category'
-    
-    id = Column(UUID(as_uuid=True), primary_key=True)
-    name = Column(String(50), nullable=False)
-    description = Column(Text)
-
-
-class Agent(Base):
-    __tablename__ = 'agent'
-
-    id = Column(String, primary_key=True, default=uuid.uuid4)
-    name = Column(String)
-    description = Column(String)
-    system_prompt = Column(String)
-    opening_question = Column(JSON)
-    knowledge = Column(JSON)
-    tools = Column(JSON)
-    voice = Column(String)
-    avatar = Column(String)
-    suggestion = Column(JSON)
-    user_id = Column(String)
-    permission = Column(String, default='temp')
-    category = Column(String)
-    llm = Column(JSON, default={"model": "gpt-3.5-turbo", "temperature": 0.8, "streaming": True})
-    gid = Column(String)
-    opening_text = Column(String)
-
-
-class ToolConfig(Base):
-    __tablename__ = 'tool'
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False)
-    description = Column(String, nullable=False)
-    func = Column(String, nullable=False)
-    user_id = Column(String, nullable=False)
-    code = Column(Text, nullable=False)
-    permission = Column(String, nullable=False)
-    avatar = Column(String, nullable=False)
-
-
-
 
 
 # Define the Plan, Discount, UserSubscription, Rebate, Order, and Withdrawal classes here
